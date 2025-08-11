@@ -18,9 +18,10 @@ type BlockSerialized struct {
 	Value *Block `json:"value"`
 }
 
-func NewBlock(prevHash string, mandates []*Mandate) *Block {
+func NewBlock(nonce int, prevHash string, mandates []*Mandate) *Block {
 	b := new(Block)
 	b.Header = &Header{
+		Nonce:    nonce,
 		PrevHash: prevHash,
 		Time:     time.Now().UnixNano(),
 	}

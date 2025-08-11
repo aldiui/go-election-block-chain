@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
+	"strings"
 )
 
 type BlockChain struct {
@@ -18,7 +18,7 @@ func NewBlockChain() *BlockChain {
 	bc := LoadDatabase()
 	if len(bc.Chain) == 0 {
 		bc.CreateGenesis()
-		bc.CreateBlock(fmt.Sprintf("%x", [32]byte{}))
+		bc.CreateBlock(0, fmt.Sprintf("%x", [32]byte{}))
 	}
 	return bc
 }
@@ -52,8 +52,8 @@ func LoadDatabase() *BlockChain {
 	return &blockChain
 }
 
-func (bc *BlockChain) CreateBlock(prevHash string) *Block {
-	b := NewBlock(prevHash, bc.Pool)
+func (bc *BlockChain) CreateBlock(nonce int, prevHash string) *Block {
+	b := NewBlock(nonce, prevHash, bc.Pool)
 	bc.Chain = append(bc.Chain, b)
 	bc.Pool = []*Mandate{}
 	return b
@@ -96,10 +96,44 @@ func (bc *BlockChain) CalculateMandate(user string) int64 {
 }
 
 func (bc *BlockChain) PlenaryRecap() {
-	for range time.Tick(time.Second * 10) {
-		log.Println("Plenary Recap:", time.Now().Format(time.TimeOnly))
-		if len(bc.Pool) > 0 {
-			bc.CreateBlock(bc.LatestBlock().Hash())
+	for {
+		if len(bc.Pool) < 1 {
+			continue
 		}
+		nonce := bc.ProofOfWork()
+		bc.CreateBlock(nonce, bc.LatestBlock().Hash())
 	}
+}
+
+func (bc *BlockChain) ValidProof(nonce int, prevHash string, mandates []*Mandate) bool {
+	prefixExpected := strings.Repeat("0", 3)
+	guessBlock := Block{
+		Header: &Header{
+			Nonce:    nonce,
+			PrevHash: prevHash,
+			Time:     0,
+		},
+		Mandates: mandates,
+	}
+	guessHashStr := guessBlock.Hash()
+	log.Printf("guessHashStr: %s", guessHashStr)
+	return guessHashStr[:3] == prefixExpected
+}
+
+func (bc *BlockChain) CopyMandates() []*Mandate {
+	mandates := make([]*Mandate, 0)
+	for _, v := range bc.Pool {
+		mandates = append(mandates, NewMandate(v.From, v.To, v.Value))
+	}
+	return mandates
+}
+
+func (bc *BlockChain) ProofOfWork() int {
+	mandates := bc.CopyMandates()
+	prevHash := bc.LatestBlock().Hash()
+	nonce := int(0)
+	for !bc.ValidProof(nonce, prevHash, mandates) {
+		nonce += 1
+	}
+	return nonce
 }
